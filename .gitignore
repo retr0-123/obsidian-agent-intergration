@@ -1,0 +1,19 @@
+node_modules/
+dist/
+
+# Generated bundles
+main.js
+helper.js
+main.css
+styles.css
+
+# Local development artifacts
+.code-review-graph/
+.obsidian/
+.DS_Store
+*.log
+.env
+.env.*
+
+# Agent planning notes, not public developer docs
+docs/superpowers/

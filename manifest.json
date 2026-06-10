@@ -1,0 +1,9 @@
+{
+  "id": "opencode-obsidian",
+  "name": "OpenCode",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Open opencode in an interactive Obsidian tab.",
+  "author": "",
+  "isDesktopOnly": true
+}
