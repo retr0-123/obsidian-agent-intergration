@@ -1,12 +1,15 @@
 import { WebSocket, WebSocketServer } from "ws";
+import { closeHelperSocket, createHelperConnectionState, isHelperSocketActive, replaceHelperSocket } from "./helperConnection";
+import { terminatePtyProcess } from "./helperProcess";
 import { acceptInitialResize, createHelperStartupState } from "./helperStartup";
 import { buildAgentLaunch } from "./platform";
 import { ClientMessage, encodeMessage, parseMessage } from "./protocol";
 import { TerminalDimensions, normalizeTerminalDimensions } from "./terminalLayout";
 
 interface PtyProcess {
-  kill(): void;
+  kill(signal?: NodeJS.Signals): void;
   onData(callback: (data: string) => void): void;
+  pid: number;
   resize(cols: number, rows: number): void;
   write(data: string): void;
 }
@@ -25,9 +28,8 @@ if (!cwd || !nodePtyPath || Number.isNaN(requestedPort) || !agentCommand.trim())
   process.exit(1);
 }
 
-let child: PtyProcess | null = null;
+const connection = createHelperConnectionState<WebSocket, PtyProcess>();
 let pty: NodePty | null = null;
-let socket: WebSocket | null = null;
 
 try {
   pty = require(nodePtyPath) as NodePty;
@@ -45,27 +47,34 @@ try {
   });
 
   server.on("connection", (connectedSocket) => {
-    if (socket && socket.readyState === socket.OPEN) {
-      connectedSocket.close();
-      return;
-    }
-
-    socket = connectedSocket;
+    replaceHelperSocket(connection, connectedSocket, terminatePtyProcess);
     const startup = createHelperStartupState();
-    socket.send(JSON.stringify({ type: "status", message: "Waiting for terminal size...\r\n" }));
+    connectedSocket.send(JSON.stringify({ type: "status", message: "Waiting for terminal size...\r\n" }));
 
-    socket.on("message", (raw) => {
+    connectedSocket.on("message", (raw) => {
+      if (!isHelperSocketActive(connection, connectedSocket)) {
+        return;
+      }
+
       const message = parseMessage<ClientMessage>(raw.toString());
       if (!message) {
         return;
       }
 
       if (message.type === "input") {
-        if (!child) {
+        if (!connection.child) {
           return;
         }
 
-        child.write(message.data || "");
+        connection.child.write(message.data || "");
+        return;
+      }
+
+      if (message.type === "terminate") {
+        if (connection.child) {
+          terminatePtyProcess(connection.child);
+          connection.child = null;
+        }
         return;
       }
 
@@ -75,7 +84,7 @@ try {
           return;
         }
 
-        if (!child) {
+        if (!connection.child) {
           const initialDimensions = acceptInitialResize(startup, dimensions);
           if (initialDimensions) {
             connectedSocket.send(JSON.stringify({ type: "status", message: `Starting ${agentCommand}...\r\n` }));
@@ -84,20 +93,25 @@ try {
           return;
         }
 
-        child.resize(dimensions.cols, dimensions.rows);
+        connection.child.resize(dimensions.cols, dimensions.rows);
       }
     });
 
-    socket.on("close", () => {
-      child?.kill();
-      child = null;
-      socket = null;
+    connectedSocket.on("close", () => {
+      closeHelperSocket(connection, connectedSocket, terminatePtyProcess);
     });
   });
 
-  process.on("exit", () => child?.kill());
+  process.on("exit", () => {
+    if (connection.child) {
+      terminatePtyProcess(connection.child);
+    }
+  });
   process.on("SIGTERM", () => {
-    child?.kill();
+    if (connection.child) {
+      terminatePtyProcess(connection.child);
+      connection.child = null;
+    }
     server.close();
     process.exit(0);
   });
@@ -108,7 +122,7 @@ try {
 }
 
 function startPty(activeSocket: WebSocket, dimensions: TerminalDimensions): void {
-  if (child) {
+  if (connection.child || !isHelperSocketActive(connection, activeSocket)) {
     return;
   }
 
@@ -118,13 +132,13 @@ function startPty(activeSocket: WebSocket, dimensions: TerminalDimensions): void
     }
 
     const launch = buildAgentLaunch(cwd, agentCommand);
-    child = pty.spawn(launch.shell, launch.args, {
+    connection.child = pty.spawn(launch.shell, launch.args, {
       ...launch.options,
       cols: dimensions.cols,
       rows: dimensions.rows,
     });
 
-    child.onData((data) => {
+    connection.child.onData((data) => {
       if (activeSocket.readyState === activeSocket.OPEN) {
         activeSocket.send(JSON.stringify({ type: "output", data }));
       }

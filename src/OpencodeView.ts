@@ -6,7 +6,12 @@ import { OpencodeSession } from "./OpencodeSession";
 import { OpencodeSessionSnapshot } from "./OpencodeSessionState";
 import { parseMessage, ServerMessage } from "./protocol";
 import { initialStartupStatus, reduceStartupStatus, StartupStatus } from "./startupStatus";
-import { canFitTerminalElement, normalizeTerminalDimensions } from "./terminalLayout";
+import {
+  canFitTerminalElement,
+  estimateTerminalDimensions,
+  normalizeTerminalDimensions,
+  writeTerminalAndScheduleFit,
+} from "./terminalLayout";
 
 export const VIEW_TYPE_OPENCODE = "opencode-view";
 
@@ -20,7 +25,10 @@ export class OpencodeView extends ItemView {
   private statusEl: HTMLElement | null = null;
   private statusTitleEl: HTMLElement | null = null;
   private startupStatus: StartupStatus = initialStartupStatus();
+  private terminalContainer: HTMLElement | null = null;
   private unsubscribeSession: (() => void) | null = null;
+  private fitRetryCount = 0;
+  private pendingFitRetry: number | null = null;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -47,6 +55,7 @@ export class OpencodeView extends ItemView {
     this.contentEl.addClass("opencode-view");
 
     const container = this.contentEl.createDiv({ cls: "opencode-terminal" });
+    this.terminalContainer = container;
     this.statusEl = this.contentEl.createDiv({ cls: "opencode-startup-status" });
     this.statusTitleEl = this.statusEl.createDiv({ cls: "opencode-startup-title" });
     this.statusDetailEl = this.statusEl.createDiv({ cls: "opencode-startup-detail" });
@@ -72,7 +81,7 @@ export class OpencodeView extends ItemView {
 
     this.resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (!entry || !canFitTerminalElement(this.contentEl)) {
+      if (!entry || !canFitTerminalElement(container)) {
         return;
       }
 
@@ -84,6 +93,7 @@ export class OpencodeView extends ItemView {
       this.sendToHelper({ type: "input", data });
     });
 
+    this.session.start();
     this.unsubscribeSession = this.session.state.subscribe((snapshot) => {
       this.applySessionSnapshot(snapshot);
     });
@@ -96,6 +106,9 @@ export class OpencodeView extends ItemView {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
 
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.sendToHelper({ type: "terminate" });
+    }
     this.socket?.close();
     this.socket = null;
 
@@ -107,31 +120,51 @@ export class OpencodeView extends ItemView {
     this.terminal?.dispose();
     this.terminal = null;
     this.fitAddon = null;
+    this.terminalContainer = null;
     this.statusEl = null;
     this.statusTitleEl = null;
     this.statusDetailEl = null;
+
+    if (this.pendingFitRetry !== null) {
+      window.clearTimeout(this.pendingFitRetry);
+      this.pendingFitRetry = null;
+    }
   }
 
   private fitTerminal(): void {
-    if (!canFitTerminalElement(this.contentEl)) {
+    const container = this.terminalContainer;
+    if (!container || !canFitTerminalElement(container)) {
+      this.retryFitIfSocketOpen();
       return;
     }
 
     const fitAddon = this.fitAddon;
     if (!fitAddon) {
+      this.retryFitIfSocketOpen();
       return;
     }
 
-    fitAddon.fit();
-    const dimensions = normalizeTerminalDimensions(fitAddon.proposeDimensions());
+    let dimensions = normalizeTerminalDimensions(fitAddon.proposeDimensions());
+    try {
+      fitAddon.fit();
+      dimensions = normalizeTerminalDimensions(fitAddon.proposeDimensions()) || dimensions;
+    } catch {
+      dimensions = dimensions || estimateTerminalDimensions(container);
+    }
+
+    dimensions = dimensions || estimateTerminalDimensions(container);
 
     if (dimensions) {
+      this.fitRetryCount = 0;
       this.sendToHelper({
         type: "resize",
         cols: dimensions.cols,
         rows: dimensions.rows,
       });
+      return;
     }
+
+    this.retryFitIfSocketOpen();
   }
 
   private scheduleFit(): void {
@@ -143,6 +176,18 @@ export class OpencodeView extends ItemView {
       this.pendingFit = null;
       this.fitTerminal();
     });
+  }
+
+  private retryFitIfSocketOpen(): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || this.fitRetryCount >= 120 || this.pendingFitRetry !== null) {
+      return;
+    }
+
+    this.fitRetryCount += 1;
+    this.pendingFitRetry = window.setTimeout(() => {
+      this.pendingFitRetry = null;
+      this.scheduleFit();
+    }, 50);
   }
 
   private applySessionSnapshot(snapshot: OpencodeSessionSnapshot): void {
@@ -170,6 +215,7 @@ export class OpencodeView extends ItemView {
     this.socket = socket;
 
     socket.onopen = () => {
+      this.fitRetryCount = 0;
       this.startupStatus = reduceStartupStatus(this.startupStatus, { type: "socket-open" });
       this.renderStartupStatus();
       this.fitTerminal();
@@ -185,20 +231,19 @@ export class OpencodeView extends ItemView {
       if (message.type === "output") {
         this.startupStatus = reduceStartupStatus(this.startupStatus, { type: "output" });
         this.renderStartupStatus();
-        this.terminal?.write(message.data);
-        this.scheduleFit();
+        writeTerminalAndScheduleFit(this.terminal, message.data, () => this.scheduleFit());
         return;
       }
 
       if (message.type === "error") {
         this.startupStatus = reduceStartupStatus(this.startupStatus, { message: message.message, type: "error" });
         this.renderStartupStatus();
-        this.terminal?.writeln(message.message);
+        writeTerminalAndScheduleFit(this.terminal, `${message.message}\r\n`, () => this.scheduleFit());
         return;
       }
 
       if (message.type === "status") {
-        this.startupStatus = reduceStartupStatus(this.startupStatus, { type: "pty-starting" });
+        this.startupStatus = reduceStartupStatus(this.startupStatus, { message: message.message, type: "pty-status" });
         this.renderStartupStatus();
         this.scheduleFit();
       }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   canFitTerminalElement,
+  estimateTerminalDimensions,
   normalizeTerminalDimensions,
+  writeTerminalAndScheduleFit,
 } from "./terminalLayout";
 
 function elementLike(width: number, height: number, connected = true): HTMLElement {
@@ -31,5 +33,47 @@ describe("terminal layout", () => {
     expect(normalizeTerminalDimensions(undefined)).toBeNull();
     expect(normalizeTerminalDimensions({ cols: 0, rows: 24 })).toBeNull();
     expect(normalizeTerminalDimensions({ cols: 80, rows: Number.NaN })).toBeNull();
+  });
+
+  it("estimates terminal dimensions from visible element pixels", () => {
+    expect(estimateTerminalDimensions(elementLike(900, 360))).toEqual({
+      cols: 100,
+      rows: 20,
+    });
+    expect(estimateTerminalDimensions(elementLike(0, 360))).toBeNull();
+  });
+
+  it("schedules fitting only after terminal output has been written", () => {
+    let writeCallback: (() => void) | undefined;
+    const writes: string[] = [];
+    let fitCount = 0;
+
+    const terminal = {
+      write(data: string, callback?: () => void) {
+        writes.push(data);
+        writeCallback = callback;
+      },
+    };
+
+    writeTerminalAndScheduleFit(terminal, "agent output", () => {
+      fitCount += 1;
+    });
+
+    expect(writes).toEqual(["agent output"]);
+    expect(fitCount).toBe(0);
+
+    writeCallback?.();
+
+    expect(fitCount).toBe(1);
+  });
+
+  it("ignores output when no terminal is available", () => {
+    let fitCount = 0;
+
+    writeTerminalAndScheduleFit(null, "agent output", () => {
+      fitCount += 1;
+    });
+
+    expect(fitCount).toBe(0);
   });
 });

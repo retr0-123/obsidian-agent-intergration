@@ -35,4 +35,29 @@ describe("OpencodeSessionState", () => {
 
     expect(replayed).toEqual(["failed:node.exe is missing"]);
   });
+
+  it("clears stale helper ports when the session restarts, fails, or closes", () => {
+    const state = new OpencodeSessionState();
+
+    state.helperReady(49152);
+    state.helperStarting();
+    expect(state.getSnapshot()).toMatchObject({
+      phase: "helper-starting",
+      port: null,
+    });
+
+    state.helperReady(49153);
+    state.fail("helper exited");
+    expect(state.getSnapshot()).toMatchObject({
+      phase: "failed",
+      port: null,
+    });
+
+    state.helperReady(49154);
+    state.close();
+    expect(state.getSnapshot()).toMatchObject({
+      phase: "closed",
+      port: null,
+    });
+  });
 });

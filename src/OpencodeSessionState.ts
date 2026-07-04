@@ -26,6 +26,7 @@ export class OpencodeSessionState {
       ...this.snapshot,
       detail,
       phase: "closed",
+      port: null,
     });
   }
 
@@ -34,6 +35,7 @@ export class OpencodeSessionState {
       ...this.snapshot,
       detail,
       phase: "failed",
+      port: null,
     });
   }
 
@@ -55,6 +57,7 @@ export class OpencodeSessionState {
       ...this.snapshot,
       detail: "Prewarming opencode helper.",
       phase: "helper-starting",
+      port: null,
     });
   }
 

@@ -29,7 +29,11 @@ export interface ResizeMessage {
   type: "resize";
 }
 
-export type ClientMessage = InputMessage | ResizeMessage;
+export interface TerminateMessage {
+  type: "terminate";
+}
+
+export type ClientMessage = InputMessage | ResizeMessage | TerminateMessage;
 export type HelperStdoutMessage = HelperReadyMessage | HelperErrorMessage;
 export type ServerMessage = HelperErrorMessage | OutputMessage | StatusMessage;
 

@@ -1,5 +1,6 @@
 import { App, Notice } from "obsidian";
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { terminatePtyProcess } from "./helperProcess";
 import { buildOpencodeHelperArgs, getVaultRootPath } from "./platform";
 import { HelperStdoutMessage, parseMessage } from "./protocol";
 import { OpencodeSessionState } from "./OpencodeSessionState";
@@ -17,7 +18,9 @@ export class OpencodeSession {
   ) {}
 
   dispose(): void {
-    this.process?.kill();
+    if (this.process) {
+      terminatePtyProcess(this.process);
+    }
     this.process = null;
 
     this.state.close();

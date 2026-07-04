@@ -10,7 +10,7 @@ export type StartupEvent =
   | { type: "socket-open" }
   | { type: "socket-error" }
   | { type: "socket-close" }
-  | { type: "pty-starting" }
+  | { message?: string; type: "pty-status" }
   | { type: "output" }
   | { message: string; type: "error" };
 
@@ -46,9 +46,9 @@ export function reduceStartupStatus(status: StartupStatus, event: StartupEvent):
     };
   }
 
-  if (event.type === "pty-starting") {
+  if (event.type === "pty-status") {
     return {
-      detail: "The terminal process is starting.",
+      detail: event.message || "The terminal process is starting.",
       title: "Waiting for agent",
       visible: true,
     };

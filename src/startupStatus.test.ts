@@ -17,6 +17,10 @@ describe("startup status", () => {
     expect(status.visible).toBe(true);
     expect(status.detail).toBe("Connected to helper. Waiting for agent output.");
 
+    status = reduceStartupStatus(status, { message: "Waiting for terminal size...\r\n", type: "pty-status" });
+    expect(status.visible).toBe(true);
+    expect(status.detail).toBe("Waiting for terminal size...\r\n");
+
     status = reduceStartupStatus(status, { type: "output" });
     expect(status.visible).toBe(false);
   });

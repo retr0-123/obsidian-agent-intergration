@@ -21,3 +21,34 @@ export function normalizeTerminalDimensions(dimensions: TerminalDimensions | und
     ? { cols, rows }
     : null;
 }
+
+export function estimateTerminalDimensions(
+  element: HTMLElement,
+  cellWidth = 9,
+  cellHeight = 18,
+): TerminalDimensions | null {
+  if (!canFitTerminalElement(element) || cellWidth <= 0 || cellHeight <= 0) {
+    return null;
+  }
+
+  return normalizeTerminalDimensions({
+    cols: Math.floor(element.offsetWidth / cellWidth),
+    rows: Math.floor(element.offsetHeight / cellHeight),
+  });
+}
+
+export interface TerminalWriter {
+  write(data: string, callback?: () => void): void;
+}
+
+export function writeTerminalAndScheduleFit(
+  terminal: TerminalWriter | null,
+  data: string,
+  scheduleFit: () => void,
+): void {
+  if (!terminal) {
+    return;
+  }
+
+  terminal.write(data, scheduleFit);
+}
