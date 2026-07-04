@@ -2,10 +2,10 @@ node_modules/
 dist/
 
 # Generated bundles
-main.js
-helper.js
-main.css
-styles.css
+/main.js
+/helper.js
+/main.css
+/styles.css
 
 # Local development artifacts
 .code-review-graph/

@@ -22,6 +22,13 @@ export function normalizeTerminalDimensions(dimensions: TerminalDimensions | und
     : null;
 }
 
+export function chooseTerminalDimensions(
+  beforeFit: TerminalDimensions | undefined,
+  afterFit: TerminalDimensions | undefined,
+): TerminalDimensions | null {
+  return normalizeTerminalDimensions(afterFit) || normalizeTerminalDimensions(beforeFit);
+}
+
 export function estimateTerminalDimensions(
   element: HTMLElement,
   cellWidth = 9,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canFitTerminalElement,
+  chooseTerminalDimensions,
   estimateTerminalDimensions,
   normalizeTerminalDimensions,
   writeTerminalAndScheduleFit,
@@ -33,6 +34,15 @@ describe("terminal layout", () => {
     expect(normalizeTerminalDimensions(undefined)).toBeNull();
     expect(normalizeTerminalDimensions({ cols: 0, rows: 24 })).toBeNull();
     expect(normalizeTerminalDimensions({ cols: 80, rows: Number.NaN })).toBeNull();
+  });
+
+  it("uses only terminal-reported dimensions for resize messages", () => {
+    expect(chooseTerminalDimensions(undefined, undefined)).toBeNull();
+    expect(chooseTerminalDimensions({ cols: 80.8, rows: 24.2 }, undefined)).toEqual({ cols: 80, rows: 24 });
+    expect(chooseTerminalDimensions({ cols: 80, rows: 24 }, { cols: 100.9, rows: 30.1 })).toEqual({
+      cols: 100,
+      rows: 30,
+    });
   });
 
   it("estimates terminal dimensions from visible element pixels", () => {

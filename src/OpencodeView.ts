@@ -8,7 +8,7 @@ import { parseMessage, ServerMessage } from "./protocol";
 import { initialStartupStatus, reduceStartupStatus, StartupStatus } from "./startupStatus";
 import {
   canFitTerminalElement,
-  estimateTerminalDimensions,
+  chooseTerminalDimensions,
   normalizeTerminalDimensions,
   writeTerminalAndScheduleFit,
 } from "./terminalLayout";
@@ -144,15 +144,14 @@ export class OpencodeView extends ItemView {
       return;
     }
 
-    let dimensions = normalizeTerminalDimensions(fitAddon.proposeDimensions());
+    const dimensionsBeforeFit = normalizeTerminalDimensions(fitAddon.proposeDimensions());
+    let dimensions = dimensionsBeforeFit;
     try {
       fitAddon.fit();
-      dimensions = normalizeTerminalDimensions(fitAddon.proposeDimensions()) || dimensions;
+      dimensions = chooseTerminalDimensions(dimensionsBeforeFit || undefined, fitAddon.proposeDimensions());
     } catch {
-      dimensions = dimensions || estimateTerminalDimensions(container);
+      dimensions = dimensionsBeforeFit;
     }
-
-    dimensions = dimensions || estimateTerminalDimensions(container);
 
     if (dimensions) {
       this.fitRetryCount = 0;

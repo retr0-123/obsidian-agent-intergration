@@ -1,0 +1,70 @@
+@import "xterm/css/xterm.css";
+
+.opencode-view {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.opencode-terminal {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: #171717;
+}
+
+.opencode-terminal .terminal,
+.opencode-terminal .xterm {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.opencode-terminal .xterm-viewport {
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.opencode-terminal .xterm-screen {
+  min-height: 0;
+}
+
+.opencode-startup-status {
+  background: #f4f2ea;
+  border: 1px solid #d8d1be;
+  color: #2e2b24;
+  left: 16px;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 12px 14px;
+  position: absolute;
+  top: 16px;
+  z-index: 2;
+}
+
+.opencode-startup-status.is-hidden {
+  display: none;
+}
+
+.opencode-startup-title {
+  color: #211f1a;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.opencode-startup-detail {
+  color: #5d574b;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
